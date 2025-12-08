@@ -1,8 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Mic, MicOff, Copy, Clipboard } from 'lucide-react';
 
+// ⚠️ SUPABASE BİLGİLERİNİZ ⚠️
+const SUPABASE_URL = 'https://ovjvtkustkjseveeyrei.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92anZ0a3VzdGtqc2V2ZWV5cmVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4NjY2NDUsImV4cCI6MjA4MDQ0MjY0NX0.fEE1tIdD6vDrDx2I9cmMOxtVs6eUbJw8GpWroCcCv2Y';
+
 const ValorantLobbies = () => {
   const [cooldownTime, setCooldownTime] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [lobbies, setLobbies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const lobbiesPerPage = 10;
+  
   const [newLobby, setNewLobby] = useState({
     rankFrom: 'Gold',
     rankTo: 'Only',
@@ -13,140 +22,90 @@ const ValorantLobbies = () => {
     code: ''
   });
 
-  const [lobbies, setLobbies] = useState([
-    {
-      id: 1,
-      rankFrom: 'Gold',
-      rankTo: 'Platinum',
-      mode: 'Competitive',
-      timeAgo: '3 minutes ago',
-      mic: 'Required',
-      age: '18+ Only',
-      code: 'GLD123',
-      spots: 2,
-      color1: 'rgb(250, 204, 21)',
-      color2: 'rgb(34, 211, 238)'
-    },
-    {
-      id: 2,
-      rankFrom: 'Platinum',
-      rankTo: 'Diamond',
-      mode: 'Unrated',
-      timeAgo: '15 minutes ago',
-      mic: 'Optional',
-      age: 'All Ages',
-      code: 'PLT456',
-      spots: 1,
-      color1: 'rgb(34, 211, 238)',
-      color2: 'rgb(168, 85, 247)'
-    },
-    {
-      id: 3,
-      rankFrom: 'Diamond',
-      rankTo: 'Only',
-      mode: 'Competitive',
-      timeAgo: '1 hour ago',
-      mic: 'Required',
-      age: '18+ Only',
-      code: 'DMD789',
-      spots: 3,
-      color1: 'rgb(168, 85, 247)',
-      color2: 'rgb(168, 85, 247)'
-    },
-    {
-      id: 4,
-      rankFrom: 'Silver',
-      rankTo: 'Gold',
-      mode: 'Spike Rush',
-      timeAgo: '2 hours ago',
-      mic: 'Optional',
-      age: 'All Ages',
-      code: 'SLV234',
-      spots: 4,
-      color1: 'rgb(156, 163, 175)',
-      color2: 'rgb(250, 204, 21)'
-    },
-    {
-      id: 5,
-      rankFrom: 'Immortal',
-      rankTo: 'Only',
-      mode: 'Competitive',
-      timeAgo: '5 minutes ago',
-      mic: 'Required',
-      age: '18+ Only',
-      code: 'IMM567',
-      spots: 2,
-      color1: 'rgb(239, 68, 68)',
-      color2: 'rgb(239, 68, 68)'
-    },
-    {
-      id: 6,
-      rankFrom: 'Bronze',
-      rankTo: 'Silver',
-      mode: 'Unrated',
-      timeAgo: '30 minutes ago',
-      mic: 'Optional',
-      age: 'All Ages',
-      code: 'BRZ890',
-      spots: 3,
-      color1: 'rgb(120, 53, 15)',
-      color2: 'rgb(156, 163, 175)'
-    },
-    {
-      id: 7,
-      rankFrom: 'Gold',
-      rankTo: 'Only',
-      mode: 'Deathmatch',
-      timeAgo: '45 minutes ago',
-      mic: 'Optional',
-      age: 'All Ages',
-      code: 'GLD678',
-      spots: 2,
-      color1: 'rgb(250, 204, 21)',
-      color2: 'rgb(250, 204, 21)'
-    },
-    {
-      id: 8,
-      rankFrom: 'Platinum',
-      rankTo: 'Diamond',
-      mode: 'Competitive',
-      timeAgo: '20 minutes ago',
-      mic: 'Required',
-      age: '18+ Only',
-      code: 'PLT901',
-      spots: 4,
-      color1: 'rgb(34, 211, 238)',
-      color2: 'rgb(168, 85, 247)'
-    },
-    {
-      id: 9,
-      rankFrom: 'Diamond',
-      rankTo: 'Ascendant',
-      mode: 'Unrated',
-      timeAgo: '1 hour ago',
-      mic: 'Optional',
-      age: 'All Ages',
-      code: 'DMD234',
-      spots: 2,
-      color1: 'rgb(168, 85, 247)',
-      color2: 'rgb(16, 185, 129)'
-    },
-    {
-      id: 10,
-      rankFrom: 'Iron',
-      rankTo: 'Bronze',
-      mode: 'Spike Rush',
-      timeAgo: '3 hours ago',
-      mic: 'Required',
-      age: 'All Ages',
-      code: 'IRN567',
-      spots: 3,
-      color1: 'rgb(75, 85, 99)',
-      color2: 'rgb(120, 53, 15)'
-    }
-  ]);
-
   const [copiedCode, setCopiedCode] = useState(null);
+
+  const ranks = ['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Ascendant', 'Immortal'];
+  const gameModes = ['Competitive', 'Unrated', 'Spike Rush', 'Deathmatch'];
+
+  // Fetch lobbies from Supabase using REST API
+  const fetchLobbies = async () => {
+    try {
+      const fiveMinutesAgo = new Date(Date.now() - 300000).toISOString();
+      
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/lobbies?created_at=gte.${fiveMinutesAgo}&order=created_at.desc`,
+        {
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        }
+      );
+
+      if (!response.ok) throw new Error('Failed to fetch lobbies');
+      
+      const data = await response.json();
+
+      const formattedLobbies = data.map(lobby => ({
+        ...lobby,
+        timeAgo: getTimeAgo(new Date(lobby.created_at)),
+        timestamp: new Date(lobby.created_at).getTime()
+      }));
+
+      setLobbies(formattedLobbies);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching lobbies:', error);
+      setLoading(false);
+    }
+  };
+
+  // Auto-refresh lobbies every 10 seconds
+  useEffect(() => {
+    fetchLobbies();
+    
+    const interval = setInterval(() => {
+      fetchLobbies();
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Auto-delete old lobbies every 30 seconds
+  useEffect(() => {
+    const deleteInterval = setInterval(async () => {
+      const fiveMinutesAgo = new Date(Date.now() - 300000).toISOString();
+      
+      try {
+        await fetch(
+          `${SUPABASE_URL}/rest/v1/lobbies?created_at=lt.${fiveMinutesAgo}`,
+          {
+            method: 'DELETE',
+            headers: {
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+            }
+          }
+        );
+      } catch (error) {
+        console.error('Error deleting old lobbies:', error);
+      }
+    }, 30000);
+
+    return () => clearInterval(deleteInterval);
+  }, []);
+
+  // Update time ago every minute
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLobbies(prev => prev.map(lobby => ({
+        ...lobby,
+        timeAgo: getTimeAgo(new Date(lobby.created_at))
+      })));
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (cooldownTime > 0) {
@@ -155,15 +114,22 @@ const ValorantLobbies = () => {
     }
   }, [cooldownTime]);
 
-  const ranks = ['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Ascendant', 'Immortal'];
-  const gameModes = ['Competitive', 'Unrated', 'Spike Rush', 'Deathmatch'];
+  const getTimeAgo = (date) => {
+    const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+    
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  };
 
   const validateLobbyCode = (code) => {
     const regex = /^[A-Z]{3}[0-9]{3}$/;
     return regex.test(code.toUpperCase());
   };
 
-  const handleCreateLobby = () => {
+  const handleCreateLobby = async () => {
     if (!validateLobbyCode(newLobby.code)) {
       alert('Invalid lobby code! Must be 3 letters followed by 3 numbers (e.g., ABC123)');
       return;
@@ -174,28 +140,41 @@ const ValorantLobbies = () => {
       return;
     }
 
-    const rankIndex = ranks.indexOf(newLobby.rankFrom);
     const color1 = getRankColorRGB(newLobby.rankFrom);
     const color2 = newLobby.rankTo === 'Only' ? color1 : getRankColorRGB(newLobby.rankTo);
 
-    const lobby = {
-      id: Date.now(),
-      rankFrom: newLobby.rankFrom,
-      rankTo: newLobby.rankTo,
-      mode: newLobby.mode,
-      timeAgo: 'Just now',
-      mic: newLobby.mic,
-      age: newLobby.age,
-      code: newLobby.code.toUpperCase(),
-      spots: newLobby.spots,
-      color1,
-      color2,
-      timestamp: Date.now()
-    };
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/lobbies`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({
+          rank_from: newLobby.rankFrom,
+          rank_to: newLobby.rankTo,
+          mode: newLobby.mode,
+          mic: newLobby.mic,
+          age: newLobby.age,
+          code: newLobby.code.toUpperCase(),
+          spots: newLobby.spots,
+          color1,
+          color2
+        })
+      });
 
-    setLobbies([lobby, ...lobbies]);
-    setNewLobby({ ...newLobby, code: '' });
-    setCooldownTime(60);
+      if (!response.ok) throw new Error('Failed to create lobby');
+
+      setNewLobby({ ...newLobby, code: '' });
+      setCooldownTime(60);
+      setCurrentPage(1);
+      fetchLobbies(); // Refresh immediately
+    } catch (error) {
+      console.error('Error creating lobby:', error);
+      alert('Error creating lobby. Please try again.');
+    }
   };
 
   const handlePasteCode = async (e) => {
@@ -207,22 +186,10 @@ const ValorantLobbies = () => {
       const cleanedText = text.trim().toUpperCase().slice(0, 6);
       setNewLobby(prev => ({ ...prev, code: cleanedText }));
     } catch (err) {
-      // Try alternative method using execCommand
-      try {
-        const input = document.createElement('input');
-        document.body.appendChild(input);
-        input.focus();
-        document.execCommand('paste');
-        const pastedText = input.value.trim().toUpperCase().slice(0, 6);
-        setNewLobby(prev => ({ ...prev, code: pastedText }));
-        document.body.removeChild(input);
-      } catch (error) {
-        // Manual paste fallback
-        const manualCode = prompt('Paste your lobby code here (6 characters: 3 letters + 3 numbers):');
-        if (manualCode) {
-          const cleanedText = manualCode.trim().toUpperCase().slice(0, 6);
-          setNewLobby(prev => ({ ...prev, code: cleanedText }));
-        }
+      const manualCode = prompt('Paste your lobby code here (6 characters: 3 letters + 3 numbers):');
+      if (manualCode) {
+        const cleanedText = manualCode.trim().toUpperCase().slice(0, 6);
+        setNewLobby(prev => ({ ...prev, code: cleanedText }));
       }
     }
   };
@@ -247,55 +214,12 @@ const ValorantLobbies = () => {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
-  const getRankColor = (rankFrom, rankTo) => {
-    return 'bg-white/20 backdrop-blur-sm border border-white/30';
-  };
-
-  const getModeColor = (mode) => {
-    return 'bg-white/20 backdrop-blur-sm border border-white/30';
-  };
-
-  const getTimeColor = (timeAgo) => {
-    return 'bg-white/20 backdrop-blur-sm border border-white/30';
-  };
-
-  const getAgeColor = (age) => {
-    if (age === 'All Ages') return 'bg-white/20 backdrop-blur-sm border border-white/30';
-    return 'bg-white/20 backdrop-blur-sm border border-white/30';
-  };
-
-  const getAgeTextColor = (age) => {
-    return 'text-gray-900';
-  };
-
-  const getSpotsColor = (spots) => {
-    return 'bg-white/20 backdrop-blur-sm border border-white/30';
-  };
-
-  const getMicIcon = (micStatus) => {
-    if (micStatus === 'Required') {
-      return (
-        <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm border border-white/30 px-4 py-1.5 rounded-full shadow-lg">
-          <Mic className="w-4 h-4 text-gray-900" />
-          <span className="text-gray-900 font-semibold text-sm">Required</span>
-        </div>
-      );
-    } else if (micStatus === 'Optional') {
-      return (
-        <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm border border-white/30 px-4 py-1.5 rounded-full shadow-lg">
-          <Mic className="w-4 h-4 text-gray-900" />
-          <span className="text-gray-900 font-semibold text-sm">Optional</span>
-        </div>
-      );
-    } else {
-      return (
-        <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm border border-white/30 px-4 py-1.5 rounded-full shadow-lg">
-          <MicOff className="w-4 h-4 text-gray-900" />
-          <span className="text-gray-900 font-semibold text-sm">Not Required</span>
-        </div>
-      );
-    }
-  };
+  const getRankColor = () => 'bg-white/20 backdrop-blur-sm border border-white/30';
+  const getModeColor = () => 'bg-white/20 backdrop-blur-sm border border-white/30';
+  const getTimeColor = () => 'bg-white/20 backdrop-blur-sm border border-white/30';
+  const getAgeColor = () => 'bg-white/20 backdrop-blur-sm border border-white/30';
+  const getAgeTextColor = () => 'text-gray-900';
+  const getSpotsColor = () => 'bg-white/20 backdrop-blur-sm border border-white/30';
 
   const getGradientStyle = (color1, color2) => {
     const c1 = color1.replace('rgb(', '').replace(')', '');
@@ -310,6 +234,24 @@ const ValorantLobbies = () => {
         rgba(${c2}, 0.2) 100%)`
     };
   };
+
+  const indexOfLastLobby = currentPage * lobbiesPerPage;
+  const indexOfFirstLobby = indexOfLastLobby - lobbiesPerPage;
+  const currentLobbies = lobbies.slice(indexOfFirstLobby, indexOfLastLobby);
+  const totalPages = Math.ceil(lobbies.length / lobbiesPerPage);
+
+  const handlePageChange = (pageNumber) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 p-6 flex items-center justify-center">
+        <div className="text-2xl font-bold text-gray-900">Loading lobbies...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
@@ -426,81 +368,111 @@ const ValorantLobbies = () => {
 
         {/* Lobbies */}
         <div className="space-y-3">
-          {lobbies.map((lobby) => (
-            <div
-              key={lobby.id}
-              className="rounded-3xl p-3 grid items-center shadow-md"
-              style={{
-                ...getGradientStyle(lobby.color1, lobby.color2),
-                gridTemplateColumns: '2fr 1fr 1fr 0.6fr 1fr 0.7fr 1fr',
-                gap: '0.5rem'
-              }}
-            >
-              {/* Column 1: Rank Range */}
-              <div className="flex items-center justify-center">
-                <div className={`${getRankColor(lobby.rankFrom, lobby.rankTo)} px-3 py-1.5 rounded-full shadow-lg w-full`}>
-                  <span className="font-semibold text-gray-900 text-sm block text-center truncate">
-                    {lobby.rankTo === 'Only' ? lobby.rankFrom : `${lobby.rankFrom} - ${lobby.rankTo}`}
-                  </span>
-                </div>
-              </div>
-
-              {/* Column 2: Mode */}
-              <div className="flex items-center justify-center">
-                <div className={`${getModeColor(lobby.mode)} px-3 py-1.5 rounded-full shadow-lg w-full`}>
-                  <span className="font-semibold text-gray-900 text-sm block text-center truncate">{lobby.mode}</span>
-                </div>
-              </div>
-
-              {/* Column 4: Mic */}
-              <div className="flex items-center justify-center">
-                <div className="bg-white/20 backdrop-blur-sm border border-white/30 px-3 py-1.5 rounded-full shadow-lg w-full flex items-center justify-center gap-1.5">
-                  {lobby.mic === 'Required' ? (
-                    <Mic className="w-3.5 h-3.5 text-gray-900 flex-shrink-0" />
-                  ) : (
-                    <MicOff className="w-3.5 h-3.5 text-gray-900 flex-shrink-0" />
-                  )}
-                  <span className="text-gray-900 font-semibold text-sm truncate">{lobby.mic}</span>
-                </div>
-              </div>
-
-              {/* Column 5: Age */}
-              <div className="flex items-center justify-center">
-                <div className={`${getAgeColor(lobby.age)} px-3 py-1.5 rounded-full shadow-lg w-full`}>
-                  <span className={`${getAgeTextColor(lobby.age)} font-semibold text-sm block text-center truncate`}>{lobby.age}</span>
-                </div>
-              </div>
-
-              {/* Column 3: Time Ago */}
-              <div className="flex items-center justify-center">
-                <div className={`${getTimeColor(lobby.timeAgo)} px-3 py-1.5 rounded-full shadow-lg w-full`}>
-                  <span className="text-gray-900 text-sm font-semibold block text-center truncate">{lobby.timeAgo}</span>
-                </div>
-              </div>
-
-              {/* Column 7: Remaining Spots */}
-              <div className="flex items-center justify-center">
-                <div className={`${getSpotsColor(lobby.spots)} px-3 py-1.5 rounded-full shadow-lg w-full`}>
-                  <span className="font-semibold text-gray-900 text-sm block text-center truncate">
-                    {lobby.spots} {lobby.spots === 1 ? 'spot' : 'spots'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Column 6: Lobby Code */}
-              <div className="flex items-center justify-center">
-                <button
-                  onClick={() => copyToClipboard(lobby.code)}
-                  className="bg-white/20 backdrop-blur-sm border border-white/30 hover:bg-white/30 px-3 py-1.5 rounded-full transition-colors shadow-lg w-full flex items-center justify-center gap-1.5"
-                  title="Click to copy"
-                >
-                  <span className="font-semibold text-gray-900 text-sm truncate">{lobby.code}</span>
-                  <Copy className="w-3.5 h-3.5 text-gray-900 flex-shrink-0" />
-                </button>
-              </div>
+          {currentLobbies.length === 0 ? (
+            <div className="text-center py-12 text-gray-600 text-lg">
+              No active lobbies. Create the first one!
             </div>
-          ))}
+          ) : (
+            currentLobbies.map((lobby) => (
+              <div
+                key={lobby.id}
+                className="rounded-3xl p-3 grid items-center shadow-md"
+                style={{
+                  ...getGradientStyle(lobby.color1, lobby.color2),
+                  gridTemplateColumns: '2fr 1fr 1fr 0.6fr 1fr 0.7fr 1fr',
+                  gap: '0.5rem'
+                }}
+              >
+                {/* Column 1: Rank Range */}
+                <div className="flex items-center justify-center">
+                  <div className={`${getRankColor()} px-3 py-1.5 rounded-full shadow-lg w-full`}>
+                    <span className="font-semibold text-gray-900 text-sm block text-center truncate">
+                      {lobby.rank_to === 'Only' ? lobby.rank_from : `${lobby.rank_from} - ${lobby.rank_to}`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Column 2: Mode */}
+                <div className="flex items-center justify-center">
+                  <div className={`${getModeColor()} px-3 py-1.5 rounded-full shadow-lg w-full`}>
+                    <span className="font-semibold text-gray-900 text-sm block text-center truncate">{lobby.mode}</span>
+                  </div>
+                </div>
+
+                {/* Column 3: Mic */}
+                <div className="flex items-center justify-center">
+                  <div className="bg-white/20 backdrop-blur-sm border border-white/30 px-3 py-1.5 rounded-full shadow-lg w-full flex items-center justify-center gap-1.5">
+                    {lobby.mic === 'Required' ? (
+                      <Mic className="w-3.5 h-3.5 text-gray-900 flex-shrink-0" />
+                    ) : (
+                      <MicOff className="w-3.5 h-3.5 text-gray-900 flex-shrink-0" />
+                    )}
+                    <span className="text-gray-900 font-semibold text-sm truncate">{lobby.mic}</span>
+                  </div>
+                </div>
+
+                {/* Column 4: Age */}
+                <div className="flex items-center justify-center">
+                  <div className={`${getAgeColor()} px-3 py-1.5 rounded-full shadow-lg w-full`}>
+                    <span className={`${getAgeTextColor()} font-semibold text-sm block text-center truncate`}>{lobby.age}</span>
+                  </div>
+                </div>
+
+                {/* Column 5: Time Ago */}
+                <div className="flex items-center justify-center">
+                  <div className={`${getTimeColor()} px-3 py-1.5 rounded-full shadow-lg w-full`}>
+                    <span className="text-gray-900 text-sm font-semibold block text-center truncate">{lobby.timeAgo}</span>
+                  </div>
+                </div>
+
+                {/* Column 6: Remaining Spots */}
+                <div className="flex items-center justify-center">
+                  <div className={`${getSpotsColor()} px-3 py-1.5 rounded-full shadow-lg w-full`}>
+                    <span className="font-semibold text-gray-900 text-sm block text-center truncate">
+                      {lobby.spots} {lobby.spots === 1 ? 'spot' : 'spots'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Column 7: Lobby Code */}
+                <div className="flex items-center justify-center">
+                  <button
+                    onClick={() => copyToClipboard(lobby.code)}
+                    className="bg-white/20 backdrop-blur-sm border border-white/30 hover:bg-white/30 px-3 py-1.5 rounded-full transition-colors shadow-lg w-full flex items-center justify-center gap-1.5"
+                    title="Click to copy"
+                  >
+                    <span className="font-semibold text-gray-900 text-sm truncate">{lobby.code}</span>
+                    <Copy className="w-3.5 h-3.5 text-gray-900 flex-shrink-0" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex flex-col items-center gap-3 mt-6">
+            <div className="flex gap-2">
+              {[...Array(totalPages)].map((_, index) => (
+                <button
+                  key={index + 1}
+                  onClick={() => handlePageChange(index + 1)}
+                  className={`px-4 py-2 rounded-full transition-colors shadow-lg ${
+                    currentPage === index + 1
+                      ? 'bg-gray-900 text-white border border-gray-900 font-bold'
+                      : 'bg-white/20 backdrop-blur-sm border border-white/30 hover:bg-white/30 text-gray-900 font-semibold'
+                  }`}
+                >
+                  {index + 1}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-700 text-center italic">
+              Lobby listings older than 5 minutes will be automatically deleted.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
