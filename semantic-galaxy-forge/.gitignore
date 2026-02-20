@@ -1,0 +1,13 @@
+node_modules/
+renderer/node_modules/
+dist-electron/
+renderer/dist/
+models/
+*.pyc
+__pycache__/
+.env
+.DS_Store
+Thumbs.db
+*.log
+venv/
+.venv/
