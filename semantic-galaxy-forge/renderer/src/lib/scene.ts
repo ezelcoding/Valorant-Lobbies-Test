@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { Node, Connection, ViewMode } from './types'
+import type { Node, Connection, ViewMode, PhysicsConfig } from './types'
 import { PhysicsSimulation } from './physics'
 import { SpaceshipControls } from './navigation'
 
@@ -28,6 +28,7 @@ export class GalaxyScene {
   private lastTime = 0
   private controls: SpaceshipControls
   physics: PhysicsSimulation
+  private basePhysicsConfig: PhysicsConfig
 
   onNodeClick?: (nodeId: number | null) => void
   onNodeHover?: (nodeId: number | null) => void
@@ -40,6 +41,7 @@ export class GalaxyScene {
 
   constructor(canvas: HTMLCanvasElement, physics: PhysicsSimulation) {
     this.physics = physics
+    this.basePhysicsConfig = { ...physics.config }
 
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0x050510)
@@ -135,11 +137,21 @@ export class GalaxyScene {
     return null
   }
 
+  setBasePhysicsConfig(config: PhysicsConfig) {
+    this.basePhysicsConfig = { ...config }
+    if (this.viewMode === 'nebulae') {
+      this.applyNebulaeConfig()
+    } else {
+      this.physics.config = { ...config }
+    }
+  }
+
   setData(nodes: Node[], connections: Connection[], communities: number[][]) {
     this.nodes = nodes
     this.connections = connections
     this.communities = communities
     this.rebuildScene()
+    this.setViewMode(this.viewMode)
   }
 
   private rebuildScene() {
@@ -258,14 +270,125 @@ export class GalaxyScene {
       mat.color.copy(color)
       mat.emissive.copy(color)
     }
+
     if (mode === 'nebulae') {
-      this.physics.config.repulsion_strength = this.physics.config.repulsion_strength * 0.5
-      this.physics.config.attraction_strength = this.physics.config.attraction_strength * 0.5
-      this.physics.config.damping = 0.15
+      this.applyNebulaeConfig()
+    } else {
+      this.physics.config = { ...this.basePhysicsConfig }
+    }
+
+    this.applyViewModeLayout(mode)
+  }
+
+  private applyViewModeLayout(mode: ViewMode) {
+    if (mode === 'clustered') {
+      this.applyClusterLayout()
+      return
+    }
+    if (mode === 'orbits') {
+      this.applyOrbitLayout()
+      return
     }
     if (mode === 'timeline') {
       this.applyTimelineLayout()
     }
+  }
+
+  private applyNebulaeConfig() {
+    const base = this.basePhysicsConfig
+    this.physics.config = {
+      ...base,
+      repulsion_strength: base.repulsion_strength * 0.5,
+      attraction_strength: base.attraction_strength * 0.5,
+      damping: Math.min(0.3, base.damping + 0.07),
+    }
+  }
+
+  private applyClusterLayout() {
+    if (this.communities.length === 0) return
+    const total = this.communities.length
+    const radius = Math.max(18, total * 6)
+
+    this.communities.forEach((community, idx) => {
+      const angle = (idx / total) * Math.PI * 2
+      const center = new THREE.Vector3(
+        Math.cos(angle) * radius,
+        (idx - (total - 1) / 2) * 4,
+        Math.sin(angle) * radius
+      )
+
+      community.forEach((nodeId, nodeIndex) => {
+        const seed = nodeId * 0.77 + nodeIndex * 1.31
+        const localAngle = this.seededRandom(seed) * Math.PI * 2
+        const localRadius = 3 + this.seededRandom(seed + 10.1) * 6
+        const localHeight = (this.seededRandom(seed + 24.7) - 0.5) * 4
+        const position = new THREE.Vector3(
+          center.x + Math.cos(localAngle) * localRadius,
+          center.y + localHeight,
+          center.z + Math.sin(localAngle) * localRadius
+        )
+        this.physics.setNodePosition(nodeId, position)
+      })
+    })
+  }
+
+  private applyOrbitLayout() {
+    if (this.nodes.length === 0) return
+    const hubId = this.getHubNodeId()
+    const center = new THREE.Vector3(0, 0, 0)
+    this.physics.setNodePosition(hubId, center)
+    this.controls.setOrbitTarget(center.clone())
+
+    const strengthMap = new Map<number, number>()
+    for (const conn of this.connections) {
+      if (conn.source_id === hubId) {
+        strengthMap.set(conn.target_id, conn.strength)
+      } else if (conn.target_id === hubId) {
+        strengthMap.set(conn.source_id, conn.strength)
+      }
+    }
+
+    const orbitNodes = this.nodes.filter((node) => node.id !== hubId)
+    const total = orbitNodes.length
+    orbitNodes.forEach((node, index) => {
+      const strength = strengthMap.get(node.id) ?? 0
+      const radius = strength > 0 ? 6 + (1 - strength) * 18 : 24 + (index % 4) * 6
+      const angle = (index / Math.max(1, total)) * Math.PI * 2
+      const height = Math.sin(angle * 1.6) * 4
+      const position = new THREE.Vector3(
+        Math.cos(angle) * radius,
+        height,
+        Math.sin(angle) * radius
+      )
+      this.physics.setNodePosition(node.id, position)
+    })
+  }
+
+  private getHubNodeId(): number {
+    if (this.nodes.length === 0) return 0
+    const scores = new Map<number, number>()
+    for (const node of this.nodes) {
+      scores.set(node.id, 0)
+    }
+    for (const conn of this.connections) {
+      scores.set(conn.source_id, (scores.get(conn.source_id) ?? 0) + conn.strength)
+      scores.set(conn.target_id, (scores.get(conn.target_id) ?? 0) + conn.strength)
+    }
+
+    let hubId = this.nodes[0].id
+    let maxScore = -Infinity
+    for (const [id, score] of scores) {
+      if (score > maxScore) {
+        maxScore = score
+        hubId = id
+      }
+    }
+    return hubId
+  }
+
+  private seededRandom(seed: number) {
+    const x = Math.sin(seed) * 10000
+    return x - Math.floor(x)
   }
 
   private applyTimelineLayout() {
@@ -294,6 +417,7 @@ export class GalaxyScene {
         mat.color.copy(color)
         mat.emissive.copy(color)
       }
+      this.applyClusterLayout()
     }
   }
 

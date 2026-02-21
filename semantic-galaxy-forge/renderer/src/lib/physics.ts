@@ -79,7 +79,7 @@ export class PhysicsSimulation {
   }
 
   update(deltaTime: number) {
-    if (!this.running || this.nodes.size < 2) return
+    if (!this.running || !this.config.enabled || this.nodes.size < 2) return
 
     const capped = Math.min(deltaTime, 0.05)
     const nodesArray = Array.from(this.nodes.values())

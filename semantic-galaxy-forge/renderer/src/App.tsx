@@ -284,6 +284,9 @@ export default function App() {
             physicsConfig={physicsConfig}
             onNodeSelect={handleNodeSelect}
             onNavigationModeChange={setNavMode}
+            onPhysicsToggle={(enabled) =>
+              setPhysicsConfig((prev) => ({ ...prev, enabled }))
+            }
             sceneRef={sceneRef}
           />
 
