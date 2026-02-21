@@ -11,6 +11,7 @@ interface GalaxyCanvasProps {
   physicsConfig: PhysicsConfig
   onNodeSelect: (nodeId: number | null) => void
   onNavigationModeChange?: (mode: 'orbit' | 'fly') => void
+  onPhysicsToggle?: (enabled: boolean) => void
   sceneRef?: React.MutableRefObject<GalaxyScene | null>
 }
 
@@ -22,6 +23,7 @@ export function GalaxyCanvas({
   physicsConfig,
   onNodeSelect,
   onNavigationModeChange,
+  onPhysicsToggle,
   sceneRef,
 }: GalaxyCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -62,6 +64,7 @@ export function GalaxyCanvas({
   useEffect(() => {
     if (sceneInstance.current && physicsRef.current) {
       physicsRef.current.config = physicsConfig
+      sceneInstance.current.setBasePhysicsConfig(physicsConfig)
     }
   }, [physicsConfig])
 
@@ -86,11 +89,13 @@ export function GalaxyCanvas({
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.code === 'Space') {
       e.preventDefault()
-      if (physicsRef.current) {
+      if (onPhysicsToggle) {
+        onPhysicsToggle(!physicsConfig.enabled)
+      } else if (physicsRef.current) {
         physicsRef.current.setRunning(!physicsRef.current.isRunning())
       }
     }
-  }, [])
+  }, [onPhysicsToggle, physicsConfig.enabled])
 
   return (
     <canvas
